@@ -12,6 +12,8 @@ const leaderboardListEl = document.querySelector("#leaderboard-list");
 const currentPlayerEl = document.querySelector("#current-player");
 const nameForm = document.querySelector("#name-form");
 const playerNameInput = document.querySelector("#player-name");
+const keyBindingsEl = document.querySelector("#key-bindings");
+const resetKeysButton = document.querySelector("#reset-keys");
 
 const state = {
   running: false,
@@ -51,13 +53,35 @@ const state = {
   bases: [],
   enemyShots: [],
   particles: [],
+  scorePopups: [],
+  awaitingKeyAction: "",
 };
 
 const leaderboardKey = "starline-run-leaderboard";
 const playersKey = "starline-run-players";
+const controlsKey = "starline-run-key-bindings";
 const segmentWidth = 34;
 const terrainBuffer = 10;
 const gravity = 680;
+const defaultKeyBindings = {
+  up: "ArrowUp",
+  down: "ArrowDown",
+  speedUp: "ArrowRight",
+  speedDown: "ArrowLeft",
+  fire: "KeyX",
+  bomb: "KeyZ",
+  pause: "Space",
+};
+const keyActions = [
+  { action: "up", label: "Steer up" },
+  { action: "down", label: "Steer down" },
+  { action: "speedUp", label: "Speed up" },
+  { action: "speedDown", label: "Slow down" },
+  { action: "fire", label: "Fire laser" },
+  { action: "bomb", label: "Drop bomb" },
+  { action: "pause", label: "Pause / resume" },
+];
+let keyBindings = { ...defaultKeyBindings };
 const audio = {
   context: null,
   master: null,
@@ -86,6 +110,79 @@ function noise(x) {
     Math.sin(x * 0.043 + 2.2) * 0.32 +
     Math.sin(x * 0.091 + 4.8) * 0.2
   );
+}
+
+function formatKey(code) {
+  const names = {
+    ArrowUp: "↑",
+    ArrowDown: "↓",
+    ArrowLeft: "←",
+    ArrowRight: "→",
+    Space: "Space",
+    Enter: "Enter",
+    ShiftLeft: "Left Shift",
+    ShiftRight: "Right Shift",
+  };
+  if (names[code]) return names[code];
+  if (code.startsWith("Key")) return code.slice(3);
+  if (code.startsWith("Digit")) return code.slice(5);
+  return code.replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+
+function loadKeyBindings() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(controlsKey) || "{}");
+    if (!parsed || typeof parsed !== "object") return { ...defaultKeyBindings };
+    const loaded = { ...defaultKeyBindings };
+    for (const action of Object.keys(defaultKeyBindings)) {
+      if (typeof parsed[action] === "string" && parsed[action]) {
+        loaded[action] = parsed[action];
+      }
+    }
+    return loaded;
+  } catch {
+    return { ...defaultKeyBindings };
+  }
+}
+
+function saveKeyBindings() {
+  try {
+    localStorage.setItem(controlsKey, JSON.stringify(keyBindings));
+  } catch {
+    // The game still works if private browsing blocks local storage.
+  }
+}
+
+function renderKeyBindings() {
+  if (!keyBindingsEl) return;
+  keyBindingsEl.innerHTML = "";
+  for (const { action, label } of keyActions) {
+    const row = document.createElement("div");
+    row.className = `key-row${state.awaitingKeyAction === action ? " listening" : ""}`;
+
+    const name = document.createElement("span");
+    name.textContent = label;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.action = action;
+    button.textContent = state.awaitingKeyAction === action ? "Press a key…" : formatKey(keyBindings[action]);
+    button.addEventListener("click", () => {
+      state.awaitingKeyAction = action;
+      renderKeyBindings();
+    });
+
+    row.append(name, button);
+    keyBindingsEl.append(row);
+  }
+}
+
+function isTextEntryTarget(target) {
+  return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+}
+
+function actionForKey(code) {
+  return Object.keys(keyBindings).find((action) => keyBindings[action] === code) || "";
 }
 
 function loadLeaderboard() {
@@ -426,6 +523,42 @@ function playBombExplosionSound() {
   punch.stop(now + 0.34);
 }
 
+function playBaseExplosionSound() {
+  if (!audio.context) return;
+  const now = audio.context.currentTime;
+  const profiles = [
+    { filterStart: 2800, filterEnd: 95, noiseGain: 0.58, toneStart: 74, toneEnd: 26, toneType: "sawtooth", duration: 0.68 },
+    { filterStart: 1700, filterEnd: 70, noiseGain: 0.46, toneStart: 118, toneEnd: 34, toneType: "triangle", duration: 0.52 },
+    { filterStart: 3400, filterEnd: 140, noiseGain: 0.5, toneStart: 58, toneEnd: 22, toneType: "square", duration: 0.76 },
+  ];
+  const profile = profiles[Math.floor(Math.random() * profiles.length)];
+  const blast = audio.context.createBufferSource();
+  const blastFilter = audio.context.createBiquadFilter();
+  const blastGain = audio.context.createGain();
+  const tone = audio.context.createOscillator();
+  const toneGain = audio.context.createGain();
+
+  blast.buffer = createNoiseBuffer(audio.context, profile.duration);
+  blastFilter.type = profile.toneType === "triangle" ? "bandpass" : "lowpass";
+  blastFilter.frequency.setValueAtTime(profile.filterStart, now);
+  blastFilter.frequency.exponentialRampToValueAtTime(profile.filterEnd, now + profile.duration * 0.82);
+  blastGain.gain.setValueAtTime(profile.noiseGain, now);
+  blastGain.gain.exponentialRampToValueAtTime(0.001, now + profile.duration);
+
+  tone.type = profile.toneType;
+  tone.frequency.setValueAtTime(profile.toneStart, now);
+  tone.frequency.exponentialRampToValueAtTime(profile.toneEnd, now + profile.duration * 0.55);
+  toneGain.gain.setValueAtTime(0.26, now);
+  toneGain.gain.exponentialRampToValueAtTime(0.001, now + profile.duration * 0.62);
+
+  blast.connect(blastFilter).connect(blastGain).connect(audio.master);
+  tone.connect(toneGain).connect(audio.master);
+  blast.start(now);
+  blast.stop(now + profile.duration);
+  tone.start(now);
+  tone.stop(now + profile.duration * 0.68);
+}
+
 function playBaseShotSound() {
   if (!audio.context) return;
   const now = audio.context.currentTime;
@@ -439,6 +572,23 @@ function playBaseShotSound() {
   osc.connect(gain).connect(audio.master);
   osc.start(now);
   osc.stop(now + 0.15);
+}
+
+function createScorePopup(x, y, amount) {
+  state.scorePopups.push({
+    x: x + 18,
+    y: y - 10,
+    vy: -22,
+    life: 1.2,
+    maxLife: 1.2,
+    amount,
+  });
+}
+
+function awardPoints(amount, x, y) {
+  state.score += amount;
+  scoreEl.textContent = Math.floor(state.score).toString();
+  createScorePopup(x, y, amount);
 }
 
 function createExplosion(x, y, size = 1, shipBlast = false) {
@@ -496,6 +646,7 @@ function resetGame() {
   state.bases = [];
   state.enemyShots = [];
   state.particles = [];
+  state.scorePopups = [];
   scoreEl.textContent = "0";
   overlay.hidden = true;
   buildTerrain(true);
@@ -820,6 +971,24 @@ function drawEnemyShots() {
   }
 }
 
+function drawScorePopups() {
+  ctx.save();
+  ctx.font = "800 18px Inter, system-ui, sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.lineWidth = 4;
+  for (const popup of state.scorePopups) {
+    const alpha = clamp(popup.life / popup.maxLife, 0, 1);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = "rgba(5, 9, 21, 0.8)";
+    ctx.fillStyle = "#fff2a8";
+    const label = `+${popup.amount}`;
+    ctx.strokeText(label, popup.x, popup.y);
+    ctx.fillText(label, popup.x, popup.y);
+  }
+  ctx.restore();
+}
+
 function drawParticles() {
   for (const particle of state.particles) {
     const alpha = clamp(particle.life / particle.maxLife, 0, 1);
@@ -839,6 +1008,15 @@ function collidesWithTerrain() {
     state.ship.y - state.ship.radius < sample.top ||
     state.ship.y + state.ship.radius > sample.bottom
   );
+}
+
+function updateScorePopups(delta) {
+  state.scorePopups = state.scorePopups.filter((popup) => {
+    popup.life -= delta;
+    popup.y += popup.vy * delta;
+    popup.vy *= 1 - delta * 0.6;
+    return popup.life > 0;
+  });
 }
 
 function updateParticles(delta) {
@@ -946,8 +1124,7 @@ function handleCombatCollisions() {
       if (Math.abs(laser.y - alien.y) < alien.radius && laser.x + laser.length > alien.x - alien.radius && laser.x - laser.length < alien.x + alien.radius) {
         state.aliens.splice(alienIndex, 1);
         state.lasers.splice(laserIndex, 1);
-        state.score += 100;
-        scoreEl.textContent = Math.floor(state.score).toString();
+        awardPoints(100, alien.x, alien.y);
         createExplosion(alien.x, alien.y, 0.75, false);
         break;
       }
@@ -966,10 +1143,9 @@ function handleCombatCollisions() {
       if (distance(bomb.x, bomb.y, base.x, base.y) < base.radius + bomb.radius + 6) {
         state.bases.splice(baseIndex, 1);
         state.bombs.splice(bombIndex, 1);
-        state.score += 150;
-        scoreEl.textContent = Math.floor(state.score).toString();
+        awardPoints(150, base.x, base.y);
         createExplosion(base.x, base.y, 1.05, false);
-        playBombExplosionSound();
+        playBaseExplosionSound();
         break;
       }
     }
@@ -996,6 +1172,7 @@ function handleCombatCollisions() {
 
 function update(delta) {
   updateParticles(delta);
+  updateScorePopups(delta);
   if (!state.running || state.paused) {
     updateAudio();
     return;
@@ -1040,6 +1217,7 @@ function render(delta) {
   drawAliens();
   drawShip();
   drawParticles();
+  drawScorePopups();
 }
 
 let lastTime = performance.now();
@@ -1080,6 +1258,12 @@ bombButton.addEventListener("pointerdown", (event) => {
   event.stopPropagation();
   dropBomb();
 });
+resetKeysButton.addEventListener("click", () => {
+  keyBindings = { ...defaultKeyBindings };
+  state.awaitingKeyAction = "";
+  saveKeyBindings();
+  renderKeyBindings();
+});
 window.addEventListener("resize", resize);
 
 window.addEventListener("pointerdown", (event) => {
@@ -1102,41 +1286,51 @@ window.addEventListener("pointerup", () => {
 });
 
 window.addEventListener("keydown", (event) => {
-  if (event.code === "Space") {
+  if (state.awaitingKeyAction) {
     event.preventDefault();
-    unlockAudio();
+    const action = state.awaitingKeyAction;
+    const previousCode = keyBindings[action];
+    const conflictingAction = Object.keys(keyBindings).find(
+      (otherAction) => otherAction !== action && keyBindings[otherAction] === event.code,
+    );
+    keyBindings[action] = event.code;
+    if (conflictingAction) keyBindings[conflictingAction] = previousCode;
+    state.awaitingKeyAction = "";
+    saveKeyBindings();
+    renderKeyBindings();
+    return;
+  }
+
+  if (isTextEntryTarget(event.target)) return;
+
+  const action = actionForKey(event.code);
+  if (!action) return;
+
+  event.preventDefault();
+  unlockAudio();
+
+  if (action === "pause") {
     if (state.running) togglePause();
     else if (!state.exploding && state.selectedPlayer) resetGame();
-  }
-  if (event.key === "ArrowUp") {
-    unlockAudio();
+  } else if (action === "up") {
     state.targetY -= 45;
-  }
-  if (event.key === "ArrowDown") {
-    unlockAudio();
+  } else if (action === "down") {
     state.targetY += 45;
-  }
-  if (event.key === "ArrowRight") {
-    event.preventDefault();
-    unlockAudio();
+  } else if (action === "speedUp") {
     nudgeSpeed(1);
-  }
-  if (event.key === "ArrowLeft") {
-    event.preventDefault();
-    unlockAudio();
+  } else if (action === "speedDown") {
     nudgeSpeed(-1);
-  }
-  if (event.key === "x" || event.key === "X" || event.code === "Enter") {
-    event.preventDefault();
+  } else if (action === "fire") {
     fireLaser();
-  }
-  if (event.key === "z" || event.key === "Z" || event.code === "ShiftLeft" || event.code === "ShiftRight") {
-    event.preventDefault();
+  } else if (action === "bomb") {
     dropBomb();
   }
+
   state.targetY = clamp(state.targetY, 42, state.height - 42);
 });
 
+keyBindings = loadKeyBindings();
+renderKeyBindings();
 state.leaderboard = loadLeaderboard();
 state.players = loadPlayers(state.leaderboard);
 refreshLeaderboardUI();

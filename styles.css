@@ -138,6 +138,7 @@ p {
 }
 
 .player-panel,
+.controls-panel,
 .leaderboard {
   margin: 0 0 14px;
 }
@@ -181,7 +182,9 @@ p {
 }
 
 .player-choice,
-.name-form button {
+.name-form button,
+.key-row button,
+.link-button {
   min-height: 38px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -226,6 +229,42 @@ p {
 
 .name-form button {
   padding: 0 14px;
+}
+
+.link-button {
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.key-bindings {
+  display: grid;
+  gap: 7px;
+}
+
+.key-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, auto);
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.key-row button {
+  min-height: 34px;
+  padding: 0 10px;
+  color: var(--text);
+}
+
+.key-row.listening button {
+  border-color: var(--accent);
+  background: rgba(124, 231, 255, 0.18);
+  color: #ffffff;
 }
 
 .leaderboard ol {
