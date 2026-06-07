@@ -23,6 +23,9 @@ const state = {
   dpr: 1,
   elapsed: 0,
   score: 0,
+  wave: 1,
+  nextWaveScore: 1000,
+  waveBanner: null,
   speed: 210,
   speedBoost: 0,
   steerAmount: 0,
@@ -58,6 +61,14 @@ const playersKey = "starline-run-players";
 const segmentWidth = 34;
 const terrainBuffer = 10;
 const gravity = 680;
+const waveScoreStep = 1000;
+const waveNames = [
+  "Wave 1: Scout Drift",
+  "Wave 2: Seekers",
+  "Wave 3: Hunter Swarm",
+  "Wave 4: Siege Run",
+  "Wave 5: Nemesis Field",
+];
 const audio = {
   context: null,
   master: null,
@@ -463,6 +474,34 @@ function nudgeSpeed(direction) {
   state.speedBoost = clamp(state.speedBoost + direction * 35, -90, 150);
 }
 
+function waveName(wave) {
+  return waveNames[wave - 1] || `Wave ${wave}: Deep Space`;
+}
+
+function waveDifficulty() {
+  return Math.max(0, state.wave - 1);
+}
+
+function beginWave(wave, announce = true) {
+  state.wave = wave;
+  state.nextWaveScore = wave * waveScoreStep;
+  if (announce) {
+    state.waveBanner = {
+      text: waveName(wave),
+      x: state.width * 0.5,
+      y: state.height * 0.47,
+      life: 2.9,
+      maxLife: 2.9,
+    };
+  }
+}
+
+function checkWaveProgress() {
+  while (state.score >= state.nextWaveScore) {
+    beginWave(state.wave + 1);
+  }
+}
+
 function resetGame() {
   unlockAudio();
   if (!state.selectedPlayer) {
@@ -479,6 +518,8 @@ function resetGame() {
   state.exploding = false;
   state.elapsed = 0;
   state.score = 0;
+  beginWave(1, false);
+  state.waveBanner = null;
   state.speed = 210;
   state.speedBoost = 0;
   state.steerAmount = 0;
@@ -577,20 +618,25 @@ function dropBomb() {
 
 function spawnAlien() {
   const x = state.width + 48;
+  const difficulty = waveDifficulty();
   const sample = terrainAt(state.camera + state.width + 80);
   const margin = 34;
   const minY = sample.top + margin;
   const maxY = sample.bottom - margin;
   if (maxY <= minY) return;
   const baseY = minY + Math.random() * (maxY - minY);
+  const seeker = state.wave > 1;
   state.aliens.push({
     x,
     y: baseY,
     baseY,
-    radius: 17,
-    speed: 68 + Math.random() * 46,
+    radius: seeker ? 18 : 17,
+    type: seeker ? "seeker" : "drifter",
+    speed: 68 + Math.random() * 46 + difficulty * 16,
+    verticalSpeed: 0,
+    aggression: seeker ? clamp(0.9 + difficulty * 0.22, 0.9, 2.2) : 0,
     phase: Math.random() * Math.PI * 2,
-    weave: 2.3 + Math.random() * 1.6,
+    weave: 2.3 + Math.random() * 1.6 + difficulty * 0.12,
     amplitude: 18 + Math.random() * 32,
   });
 }
@@ -598,11 +644,14 @@ function spawnAlien() {
 function spawnBase() {
   const x = state.width + 70;
   const ground = terrainAt(state.camera + x).bottom;
+  const difficulty = waveDifficulty();
   state.bases.push({
     x,
     y: ground - 16,
     radius: 19,
-    cooldown: 0.55 + Math.random() * 0.8,
+    cooldown:
+      Math.max(0.28, 0.55 - difficulty * 0.07) +
+      Math.random() * Math.max(0.35, 0.8 - difficulty * 0.06),
   });
 }
 
@@ -745,29 +794,64 @@ function drawAliens() {
   for (const alien of state.aliens) {
     ctx.save();
     ctx.translate(alien.x, alien.y);
-    ctx.fillStyle = "rgba(142, 255, 127, 0.2)";
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 26, 16, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#8dff7f";
-    ctx.strokeStyle = "#173d24";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 18, 12, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#06120a";
-    ctx.beginPath();
-    ctx.arc(6, -3, 3, 0, Math.PI * 2);
-    ctx.arc(6, 5, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "#8dff7f";
-    ctx.beginPath();
-    ctx.moveTo(-9, -9);
-    ctx.lineTo(-19, -18);
-    ctx.moveTo(-9, 9);
-    ctx.lineTo(-19, 18);
-    ctx.stroke();
+    if (alien.type === "seeker") {
+      ctx.rotate(Math.atan2(state.ship.y - alien.y, state.ship.x - alien.x));
+      ctx.fillStyle = "rgba(255, 78, 184, 0.24)";
+      ctx.beginPath();
+      ctx.ellipse(-2, 0, 29, 18, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ff4eb8";
+      ctx.strokeStyle = "#3a0831";
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(22, 0);
+      ctx.lineTo(-10, -16);
+      ctx.lineTo(-2, -5);
+      ctx.lineTo(-22, -8);
+      ctx.lineTo(-12, 0);
+      ctx.lineTo(-22, 8);
+      ctx.lineTo(-2, 5);
+      ctx.lineTo(-10, 16);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#fff0fb";
+      ctx.beginPath();
+      ctx.arc(8, -4, 3.4, 0, Math.PI * 2);
+      ctx.arc(8, 4, 3.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#ffd2f0";
+      ctx.beginPath();
+      ctx.moveTo(-16, -12);
+      ctx.lineTo(-27, -21);
+      ctx.moveTo(-16, 12);
+      ctx.lineTo(-27, 21);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = "rgba(142, 255, 127, 0.2)";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 26, 16, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#8dff7f";
+      ctx.strokeStyle = "#173d24";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 18, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#06120a";
+      ctx.beginPath();
+      ctx.arc(6, -3, 3, 0, Math.PI * 2);
+      ctx.arc(6, 5, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#8dff7f";
+      ctx.beginPath();
+      ctx.moveTo(-9, -9);
+      ctx.lineTo(-19, -18);
+      ctx.moveTo(-9, 9);
+      ctx.lineTo(-19, 18);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 }
@@ -875,12 +959,29 @@ function updateAliens(delta) {
   state.nextAlienIn -= delta;
   if (state.nextAlienIn <= 0) {
     spawnAlien();
-    state.nextAlienIn = clamp(1.35 - state.elapsed * 0.015, 0.55, 1.35) + Math.random() * 0.45;
+    const difficulty = waveDifficulty();
+    state.nextAlienIn =
+      clamp(1.35 - state.elapsed * 0.015 - difficulty * 0.12, 0.35, 1.35) +
+      Math.random() * 0.45;
   }
 
   for (const alien of state.aliens) {
     alien.x -= (state.speed + alien.speed) * delta;
-    alien.y = alien.baseY + Math.sin(state.elapsed * alien.weave + alien.phase) * alien.amplitude;
+    if (alien.type === "seeker") {
+      const preferredX = state.ship.x + 42;
+      const closing = alien.x > preferredX ? -state.speed * 0.1 : state.speed * 0.04;
+      alien.x += closing * delta;
+      const desiredY = state.ship.y + Math.sin(state.elapsed * alien.weave + alien.phase) * 24;
+      const steer = clamp(
+        (desiredY - alien.y) * alien.aggression,
+        -260 - waveDifficulty() * 25,
+        260 + waveDifficulty() * 25,
+      );
+      alien.verticalSpeed = lerp(alien.verticalSpeed, steer, 0.08);
+      alien.y += alien.verticalSpeed * delta;
+    } else {
+      alien.y = alien.baseY + Math.sin(state.elapsed * alien.weave + alien.phase) * alien.amplitude;
+    }
     const terrain = terrainAt(state.camera + alien.x);
     alien.y = clamp(alien.y, terrain.top + 28, terrain.bottom - 28);
   }
@@ -892,7 +993,7 @@ function fireBaseShot(base) {
   const dx = state.ship.x - base.x;
   const dy = state.ship.y - base.y;
   const length = Math.max(1, Math.hypot(dx, dy));
-  const speed = 260 + Math.min(110, state.elapsed * 3);
+  const speed = 260 + Math.min(110, state.elapsed * 3) + waveDifficulty() * 28;
   state.enemyShots.push({
     x: base.x,
     y: base.y - 23,
@@ -916,7 +1017,10 @@ function updateBases(delta) {
     base.cooldown -= delta;
     if (base.cooldown <= 0 && base.x > state.ship.x + 35 && base.x < state.width - 10) {
       fireBaseShot(base);
-      base.cooldown = 1.05 + Math.random() * 0.85;
+      const difficulty = waveDifficulty();
+      base.cooldown =
+        Math.max(0.42, 1.05 - difficulty * 0.11) +
+        Math.random() * Math.max(0.32, 0.85 - difficulty * 0.07);
     }
   }
 
@@ -947,6 +1051,7 @@ function handleCombatCollisions() {
         state.aliens.splice(alienIndex, 1);
         state.lasers.splice(laserIndex, 1);
         state.score += 100;
+        checkWaveProgress();
         scoreEl.textContent = Math.floor(state.score).toString();
         createExplosion(alien.x, alien.y, 0.75, false);
         break;
@@ -967,6 +1072,7 @@ function handleCombatCollisions() {
         state.bases.splice(baseIndex, 1);
         state.bombs.splice(bombIndex, 1);
         state.score += 150;
+        checkWaveProgress();
         scoreEl.textContent = Math.floor(state.score).toString();
         createExplosion(base.x, base.y, 1.05, false);
         playBombExplosionSound();
@@ -1005,6 +1111,7 @@ function update(delta) {
   state.speed = 210 + Math.min(170, state.elapsed * 8) + state.speedBoost;
   state.camera += state.speed * delta;
   state.score += delta * state.speed * 0.07;
+  checkWaveProgress();
   scoreEl.textContent = Math.floor(state.score).toString();
   buildTerrain();
 
@@ -1023,11 +1130,40 @@ function update(delta) {
   updateBases(delta);
   updateEnemyShots(delta);
   handleCombatCollisions();
+  updateWaveBanner(delta);
   updateAudio();
 
   if (collidesWithTerrain()) {
     crashShip();
   }
+}
+
+function updateWaveBanner(delta) {
+  if (!state.waveBanner) return;
+  state.waveBanner.life -= delta;
+  state.waveBanner.x -= (state.speed + 80) * delta;
+  if (state.waveBanner.life <= 0 || state.waveBanner.x < -state.width * 0.6) {
+    state.waveBanner = null;
+  }
+}
+
+function drawWaveBanner() {
+  if (!state.waveBanner) return;
+  const banner = state.waveBanner;
+  const alpha = clamp(Math.min(banner.life, banner.maxLife - banner.life) / 0.35, 0, 1);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `900 ${clamp(state.width * 0.095, 44, 92)}px system-ui, sans-serif`;
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = "rgba(5, 9, 21, 0.72)";
+  ctx.fillStyle = "#fff4a8";
+  ctx.shadowColor = "rgba(255, 184, 76, 0.65)";
+  ctx.shadowBlur = 22;
+  ctx.strokeText(banner.text, banner.x, banner.y);
+  ctx.fillText(banner.text, banner.x, banner.y);
+  ctx.restore();
 }
 
 function render(delta) {
@@ -1040,6 +1176,7 @@ function render(delta) {
   drawAliens();
   drawShip();
   drawParticles();
+  drawWaveBanner();
 }
 
 let lastTime = performance.now();
