@@ -40,7 +40,7 @@
     <div class="overlay" id="overlay">
       <div class="dialog">
         <h1>Starline Run</h1>
-        <p id="message">Drag anywhere to guide the ship. Tap arrow to fire, down arrow to bomb. Keyboard: X fires, Z bombs.</p>
+        <p id="message">Drag anywhere to guide the ship. Use the buttons or your configured keyboard controls to fire, bomb, and fly.</p>
         <section class="player-panel" aria-label="Player selection">
           <div class="panel-heading">
             <span>Player</span>
@@ -51,6 +51,13 @@
             <input id="player-name" name="player-name" type="text" maxlength="18" placeholder="New player name" />
             <button type="submit">Add</button>
           </form>
+        </section>
+        <section class="controls-panel" aria-label="Keyboard controls">
+          <div class="panel-heading">
+            <span>Keyboard</span>
+            <button class="link-button" id="reset-keys" type="button">Reset defaults</button>
+          </div>
+          <div class="key-bindings" id="key-bindings"></div>
         </section>
         <section class="leaderboard" aria-label="Leaderboard">
           <div class="panel-heading">
