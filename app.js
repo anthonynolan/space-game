@@ -1,6 +1,9 @@
 const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
 const scoreEl = document.querySelector("#score");
+const livesEl = document.querySelector("#lives");
+const deployStatEl = document.querySelector("#deploy-stat");
+const deployNameEl = document.querySelector("#deploy-name");
 const overlay = document.querySelector("#overlay");
 const messageEl = document.querySelector("#message");
 const startButton = document.querySelector("#start");
@@ -14,6 +17,7 @@ const nameForm = document.querySelector("#name-form");
 const playerNameInput = document.querySelector("#player-name");
 const keyBindingsEl = document.querySelector("#key-bindings");
 const resetKeysButton = document.querySelector("#reset-keys");
+const shipPickerEl = document.querySelector("#ship-picker");
 
 const state = {
   running: false,
@@ -25,6 +29,8 @@ const state = {
   dpr: 1,
   elapsed: 0,
   score: 0,
+  lives: 3,
+  nextLifeScore: 1000,
   wave: 1,
   nextWaveScore: 1000,
   waveBanner: null,
@@ -40,6 +46,7 @@ const state = {
   bombCooldown: 0,
   endTimer: null,
   selectedPlayer: "",
+  selectedShip: "arrow",
   players: [],
   leaderboard: [],
   ship: {
@@ -63,10 +70,14 @@ const state = {
 const leaderboardKey = "starline-run-leaderboard";
 const playersKey = "starline-run-players";
 const controlsKey = "starline-run-key-bindings";
+const shipKey = "starline-run-ship";
 const segmentWidth = 34;
 const terrainBuffer = 10;
 const gravity = 680;
 const waveScoreStep = 1000;
+const startingLives = 3;
+const extraLifeScoreStep = 1000;
+const maxVisibleLifeIcons = 8;
 const waveNames = [
   "Wave 1: Scout Drift",
   "Wave 2: Seekers",
@@ -93,6 +104,86 @@ const keyActions = [
   { action: "pause", label: "Pause / resume" },
 ];
 let keyBindings = { ...defaultKeyBindings };
+const shipOptions = [
+  {
+    id: "arrow",
+    name: "Arrow",
+    path: "M23 0 L-17 -13 L-9 0 L-17 13 Z",
+    cockpit: "M2 -2 m-8 0 a8 5 -12 1 0 16 0 a8 5 -12 1 0 -16 0",
+    plume: "M-17 -7 L-38 0 L-17 7 Z",
+    glow: "M28 0 A39 19 0 1 1 -50 0 A39 19 0 1 1 28 0",
+    primary: "#eaf7ff",
+    trim: "#74d9f1",
+    cockpitFill: "#1d6d86",
+    flame: "#ffb84c",
+    lifeClip: "polygon(100% 50%, 12% 0, 34% 50%, 12% 100%)",
+  },
+  {
+    id: "comet",
+    name: "Comet",
+    path: "M25 0 C10 -16 -17 -14 -25 -5 L-13 0 L-25 5 C-17 14 10 16 25 0 Z",
+    cockpit: "M3 0 m-7 0 a7 5 0 1 0 14 0 a7 5 0 1 0 -14 0",
+    plume: "M-23 -6 L-41 0 L-23 6 Z",
+    glow: "M29 0 A41 20 0 1 1 -53 0 A41 20 0 1 1 29 0",
+    primary: "#8dff7f",
+    trim: "#d9ffd3",
+    cockpitFill: "#245d2f",
+    flame: "#7ce7ff",
+    lifeClip: "ellipse(48% 42% at 50% 50%)",
+  },
+  {
+    id: "raven",
+    name: "Raven",
+    path: "M24 0 L2 -17 L-8 -6 L-25 -15 L-14 0 L-25 15 L-8 6 L2 17 Z",
+    cockpit: "M4 0 m-6 0 a6 4 0 1 0 12 0 a6 4 0 1 0 -12 0",
+    plume: "M-15 -6 L-36 0 L-15 6 Z",
+    glow: "M29 0 A40 20 0 1 1 -51 0 A40 20 0 1 1 29 0",
+    primary: "#ff4eb8",
+    trim: "#ffd2f0",
+    cockpitFill: "#3a0831",
+    flame: "#fff2a8",
+    lifeClip: "polygon(100% 50%, 56% 0, 36% 34%, 0 0, 22% 50%, 0 100%, 36% 66%, 56% 100%)",
+  },
+  {
+    id: "atlas",
+    name: "Atlas",
+    path: "M24 0 L6 -12 L-18 -12 L-26 0 L-18 12 L6 12 Z",
+    cockpit: "M4 0 m-7 0 a7 5 0 1 0 14 0 a7 5 0 1 0 -14 0",
+    plume: "M-24 -7 L-42 0 L-24 7 Z",
+    glow: "M28 0 A42 19 0 1 1 -56 0 A42 19 0 1 1 28 0",
+    primary: "#fff2a8",
+    trim: "#ffb84c",
+    cockpitFill: "#704411",
+    flame: "#ff555e",
+    lifeClip: "polygon(100% 50%, 62% 0, 14% 0, 0 50%, 14% 100%, 62% 100%)",
+  },
+  {
+    id: "needle",
+    name: "Needle",
+    path: "M29 0 L-20 -8 L-12 0 L-20 8 Z",
+    cockpit: "M2 0 m-5 0 a5 3.5 0 1 0 10 0 a5 3.5 0 1 0 -10 0",
+    plume: "M-18 -4 L-43 0 L-18 4 Z",
+    glow: "M32 0 A43 14 0 1 1 -54 0 A43 14 0 1 1 32 0",
+    primary: "#b8c5ff",
+    trim: "#7c8cff",
+    cockpitFill: "#1b286e",
+    flame: "#7ce7ff",
+    lifeClip: "polygon(100% 50%, 0 4%, 18% 50%, 0 96%)",
+  },
+  {
+    id: "orbiter",
+    name: "Orbiter",
+    path: "M22 0 C12 -10 -13 -12 -26 0 C-13 12 12 10 22 0 Z",
+    cockpit: "M1 0 m-8 0 a8 5 0 1 0 16 0 a8 5 0 1 0 -16 0",
+    plume: "M-22 -5 L-36 0 L-22 5 Z",
+    glow: "M27 0 A38 18 0 1 1 -49 0 A38 18 0 1 1 27 0",
+    primary: "#ff8f70",
+    trim: "#ffd0c3",
+    cockpitFill: "#6b2517",
+    flame: "#fff2a8",
+    lifeClip: "ellipse(50% 38% at 50% 50%)",
+  },
+];
 const audio = {
   context: null,
   master: null,
@@ -161,6 +252,93 @@ function saveKeyBindings() {
     localStorage.setItem(controlsKey, JSON.stringify(keyBindings));
   } catch {
     // The game still works if private browsing blocks local storage.
+  }
+}
+
+function getShipOption(id = state.selectedShip) {
+  return shipOptions.find((ship) => ship.id === id) || shipOptions[0];
+}
+
+function getShipCanvasPaths(ship) {
+  if (!ship.canvasPaths) {
+    ship.canvasPaths = {
+      glow: new Path2D(ship.glow),
+      plume: new Path2D(ship.plume),
+      hull: new Path2D(ship.path),
+      cockpit: new Path2D(ship.cockpit),
+    };
+  }
+  return ship.canvasPaths;
+}
+
+function loadSelectedShip() {
+  try {
+    const saved = localStorage.getItem(shipKey);
+    return getShipOption(saved).id;
+  } catch {
+    return shipOptions[0].id;
+  }
+}
+
+function saveSelectedShip() {
+  try {
+    localStorage.setItem(shipKey, state.selectedShip);
+  } catch {
+    // The game still works if private browsing blocks local storage.
+  }
+}
+
+function createShipPreview(ship) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "-46 -24 80 48");
+  svg.setAttribute("aria-hidden", "true");
+
+  const glow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  glow.setAttribute("d", ship.glow);
+  glow.setAttribute("fill", ship.trim);
+  glow.setAttribute("opacity", "0.2");
+
+  const plume = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  plume.setAttribute("d", ship.plume);
+  plume.setAttribute("fill", ship.flame);
+
+  const hull = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  hull.setAttribute("d", ship.path);
+  hull.setAttribute("fill", ship.primary);
+  hull.setAttribute("stroke", ship.trim);
+  hull.setAttribute("stroke-width", "2.2");
+  hull.setAttribute("stroke-linejoin", "round");
+
+  const cockpit = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  cockpit.setAttribute("d", ship.cockpit);
+  cockpit.setAttribute("fill", ship.cockpitFill);
+
+  svg.append(glow, plume, hull, cockpit);
+  return svg;
+}
+
+function renderShipPicker() {
+  shipPickerEl.innerHTML = "";
+  for (const ship of shipOptions) {
+    const button = document.createElement("button");
+    button.className = `ship-choice${ship.id === state.selectedShip ? " active" : ""}`;
+    button.type = "button";
+    button.setAttribute("aria-label", `${ship.name} ship`);
+    button.setAttribute("aria-pressed", ship.id === state.selectedShip ? "true" : "false");
+    button.append(createShipPreview(ship));
+
+    const label = document.createElement("span");
+    label.textContent = ship.name;
+    button.append(label);
+
+    button.addEventListener("click", () => {
+      state.selectedShip = ship.id;
+      saveSelectedShip();
+      renderShipPicker();
+      renderLives(true);
+    });
+
+    shipPickerEl.append(button);
   }
 }
 
@@ -328,6 +506,36 @@ function saveScore() {
     .slice(0, 10);
   saveLeaderboard();
   refreshLeaderboardUI();
+}
+
+function renderLives(force = false) {
+  const lives = Math.max(0, Math.floor(state.lives));
+  const ship = getShipOption();
+  if (!force && livesEl.dataset.lives === String(lives) && livesEl.dataset.ship === ship.id) return;
+  livesEl.dataset.lives = String(lives);
+  livesEl.dataset.ship = ship.id;
+  livesEl.innerHTML = "";
+  const visibleLives = Math.min(lives, maxVisibleLifeIcons);
+  for (let i = 0; i < visibleLives; i += 1) {
+    const life = document.createElement("span");
+    life.className = "life-icon";
+    life.style.setProperty("--life-fill", ship.primary);
+    life.style.setProperty("--life-stroke", ship.trim);
+    life.style.setProperty("--life-clip", ship.lifeClip);
+    livesEl.append(life);
+  }
+  if (lives > maxVisibleLifeIcons) {
+    const count = document.createElement("span");
+    count.className = "life-count";
+    count.textContent = `x${lives}`;
+    livesEl.append(count);
+  }
+  livesEl.setAttribute("aria-label", `${lives} ${lives === 1 ? "life" : "lives"}`);
+}
+
+function updateHud() {
+  scoreEl.textContent = Math.floor(state.score).toString();
+  renderLives();
 }
 
 function resize() {
@@ -597,10 +805,18 @@ function createScorePopup(x, y, amount) {
 }
 
 function awardPoints(amount, x, y) {
+  addScore(amount);
+  createScorePopup(x, y, amount);
+}
+
+function addScore(amount) {
   state.score += amount;
   checkWaveProgress();
-  scoreEl.textContent = Math.floor(state.score).toString();
-  createScorePopup(x, y, amount);
+  while (state.score >= state.nextLifeScore) {
+    state.lives += 1;
+    state.nextLifeScore += extraLifeScoreStep;
+  }
+  updateHud();
 }
 
 function createExplosion(x, y, size = 1, shipBlast = false) {
@@ -669,6 +885,8 @@ function resetGame() {
   state.exploding = false;
   state.elapsed = 0;
   state.score = 0;
+  state.lives = startingLives;
+  state.nextLifeScore = extraLifeScoreStep;
   beginWave(1, false);
   state.waveBanner = null;
   state.speed = 210;
@@ -689,7 +907,7 @@ function resetGame() {
   state.enemyShots = [];
   state.particles = [];
   state.scorePopups = [];
-  scoreEl.textContent = "0";
+  updateHud();
   overlay.hidden = true;
   buildTerrain(true);
   updatePauseIcon();
@@ -702,19 +920,48 @@ function finishGame() {
   overlay.hidden = false;
 }
 
+function respawnShip() {
+  const tunnel = terrainAt(state.camera + state.ship.x);
+  const centerY = (tunnel.top + tunnel.bottom) * 0.5;
+  state.running = true;
+  state.exploding = false;
+  state.ship.y = clamp(centerY, 42, state.height - 42);
+  state.ship.velocity = 0;
+  state.targetY = state.ship.y;
+  state.steerAmount = 0;
+  state.lasers = [];
+  state.bombs = [];
+  state.aliens = [];
+  state.bases = [];
+  state.enemyShots = [];
+  state.shotCooldown = 0.25;
+  state.bombCooldown = 0.5;
+  updateAudio();
+}
+
 function crashShip() {
-  if (state.ended) return;
+  if (state.ended || state.exploding) return;
+  state.lives = Math.max(0, state.lives - 1);
+  renderLives();
   state.running = false;
-  state.ended = true;
   state.exploding = true;
   state.lasers = [];
   state.bombs = [];
   createExplosion(state.ship.x, state.ship.y, 1.35, true);
   playExplosionSound();
   updateAudio();
+  if (state.lives <= 0) {
+    state.ended = true;
+    state.endTimer = window.setTimeout(() => {
+      state.endTimer = null;
+      finishGame();
+    }, 850);
+    return;
+  }
+
   state.endTimer = window.setTimeout(() => {
     state.endTimer = null;
-    finishGame();
+    respawnShip();
   }, 850);
 }
 
@@ -727,6 +974,17 @@ function togglePause() {
   updatePauseIcon();
 }
 
+function pauseForHiddenBrowser() {
+  state.pointerDown = false;
+  if (!state.running || state.paused || state.ended) return;
+  state.paused = true;
+  overlay.hidden = false;
+  messageEl.textContent = "Paused";
+  startButton.textContent = "Resume";
+  updatePauseIcon();
+  updateAudio();
+}
+
 function updatePauseIcon() {
   pauseButton.setAttribute("aria-label", state.paused ? "Resume" : "Pause");
   pauseButton.innerHTML = state.paused
@@ -734,10 +992,46 @@ function updatePauseIcon() {
     : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>';
 }
 
+async function loadDeployInfo() {
+  if (!deployStatEl || !deployNameEl) return;
+
+  try {
+    const response = await fetch(`deploy.json?ts=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) return;
+
+    const deployInfo = await response.json();
+    const name = typeof deployInfo.name === "string" ? deployInfo.name.trim() : "";
+    if (!name) return;
+
+    deployNameEl.textContent = name;
+    deployStatEl.hidden = false;
+  } catch {
+    // Local file previews and first-time deploys may not have deploy metadata.
+  }
+}
+
 function setTargetFromEvent(event) {
   const point = event.touches ? event.touches[0] : event;
   state.targetY = clamp(point.clientY, 42, state.height - 42);
   unlockAudio();
+}
+
+function isMobileControlsZone(event) {
+  if (window.innerWidth > 520) return false;
+  if (event.target.closest(".controls")) return true;
+  const controlsRect = document.querySelector(".controls")?.getBoundingClientRect();
+  return Boolean(
+    controlsRect &&
+      event.clientX >= controlsRect.left &&
+      event.clientX <= controlsRect.right &&
+      event.clientY >= controlsRect.top &&
+      event.clientY <= controlsRect.bottom
+  );
+}
+
+function isMobileSteeringZone(event) {
+  if (window.innerWidth > 520) return true;
+  return event.clientX >= window.innerWidth * 0.58;
 }
 
 function fireLaser() {
@@ -872,39 +1166,32 @@ function drawTerrain() {
 function drawShip() {
   if (state.exploding) return;
   const ship = state.ship;
+  const selectedShip = getShipOption();
+  const paths = getShipCanvasPaths(selectedShip);
   ctx.save();
   ctx.translate(ship.x, ship.y);
   ctx.rotate(clamp(ship.velocity / 900, -0.45, 0.45));
 
-  ctx.fillStyle = "rgba(124, 231, 255, 0.22)";
-  ctx.beginPath();
-  ctx.ellipse(-10, 0, 38, 18, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillStyle = selectedShip.trim;
+  ctx.globalAlpha = 0.22;
+  ctx.fill(paths.glow);
+  ctx.globalAlpha = 1;
 
-  ctx.fillStyle = "#eaf7ff";
-  ctx.strokeStyle = "#74d9f1";
+  ctx.fillStyle = selectedShip.primary;
+  ctx.strokeStyle = selectedShip.trim;
   ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(23, 0);
-  ctx.lineTo(-17, -13);
-  ctx.lineTo(-9, 0);
-  ctx.lineTo(-17, 13);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
+  ctx.lineJoin = "round";
+  ctx.fill(paths.hull);
+  ctx.stroke(paths.hull);
 
-  ctx.fillStyle = "#1d6d86";
-  ctx.beginPath();
-  ctx.ellipse(2, -2, 8, 5, -0.2, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillStyle = selectedShip.cockpitFill;
+  ctx.fill(paths.cockpit);
 
-  ctx.fillStyle = "#ffb84c";
-  ctx.beginPath();
-  ctx.moveTo(-17, -7);
-  ctx.lineTo(-35 - Math.random() * 10, 0);
-  ctx.lineTo(-17, 7);
-  ctx.closePath();
-  ctx.fill();
+  ctx.save();
+  ctx.scale(1 + Math.random() * 0.22, 1);
+  ctx.fillStyle = selectedShip.flame;
+  ctx.fill(paths.plume);
+  ctx.restore();
   ctx.restore();
 }
 
@@ -1286,9 +1573,7 @@ function update(delta) {
   state.elapsed += delta;
   state.speed = 210 + Math.min(170, state.elapsed * 8) + state.speedBoost;
   state.camera += state.speed * delta;
-  state.score += delta * state.speed * 0.07;
-  checkWaveProgress();
-  scoreEl.textContent = Math.floor(state.score).toString();
+  addScore(delta * state.speed * 0.07);
   buildTerrain();
 
   const previousY = state.ship.y;
@@ -1403,15 +1688,16 @@ resetKeysButton.addEventListener("click", () => {
 window.addEventListener("resize", resize);
 
 window.addEventListener("pointerdown", (event) => {
-  if (event.target.closest("button")) return;
+  if (event.target.closest("button") || isMobileControlsZone(event) || !isMobileSteeringZone(event)) return;
   state.pointerDown = true;
   unlockAudio();
   setTargetFromEvent(event);
-  if (!state.running && overlay.hidden && !state.ended) resetGame();
+  if (!state.running && overlay.hidden && !state.ended && !state.exploding) resetGame();
 });
 
 window.addEventListener("pointermove", (event) => {
   if (state.pointerDown) {
+    if (!isMobileSteeringZone(event)) return;
     unlockAudio();
     setTargetFromEvent(event);
   }
@@ -1420,6 +1706,21 @@ window.addEventListener("pointermove", (event) => {
 window.addEventListener("pointerup", () => {
   state.pointerDown = false;
 });
+
+window.addEventListener("pointercancel", () => {
+  state.pointerDown = false;
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    pauseForHiddenBrowser();
+  } else {
+    lastTime = performance.now();
+  }
+});
+
+window.addEventListener("pagehide", pauseForHiddenBrowser);
+window.addEventListener("blur", pauseForHiddenBrowser);
 
 window.addEventListener("keydown", (event) => {
   if (state.awaitingKeyAction) {
@@ -1466,9 +1767,13 @@ window.addEventListener("keydown", (event) => {
 });
 
 keyBindings = loadKeyBindings();
+state.selectedShip = loadSelectedShip();
 renderKeyBindings();
+renderShipPicker();
 state.leaderboard = loadLeaderboard();
 state.players = loadPlayers(state.leaderboard);
 refreshLeaderboardUI();
+renderLives();
+loadDeployInfo();
 resize();
 requestAnimationFrame(loop);

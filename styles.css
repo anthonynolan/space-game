@@ -34,15 +34,17 @@ canvas {
 .hud {
   position: fixed;
   inset: env(safe-area-inset-top) 0 auto 0;
+  z-index: 2;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   padding: 12px max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
   pointer-events: none;
 }
 
 .controls {
+  margin-left: auto;
   display: flex;
   gap: 8px;
   pointer-events: auto;
@@ -82,6 +84,52 @@ canvas {
   line-height: 1;
 }
 
+.lives-stat {
+  grid-template-columns: auto minmax(78px, auto);
+}
+
+.deploy-stat strong {
+  min-width: 0;
+  max-width: 148px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lives {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 78px;
+}
+
+.life-icon {
+  position: relative;
+  width: 18px;
+  height: 14px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 6px rgba(124, 231, 255, 0.42));
+}
+
+.life-icon::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  clip-path: var(--life-clip, polygon(100% 50%, 12% 0, 34% 50%, 12% 100%));
+  background: var(--life-fill, #eaf7ff);
+  border: 1px solid var(--life-stroke, #74d9f1);
+}
+
+.life-count {
+  min-width: 24px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: right;
+}
+
 .button {
   display: inline-grid;
   place-items: center;
@@ -100,6 +148,7 @@ canvas {
 .overlay {
   position: fixed;
   inset: 0;
+  z-index: 4;
   display: grid;
   place-items: center;
   padding: 18px;
@@ -138,6 +187,7 @@ p {
 }
 
 .player-panel,
+.ship-panel,
 .controls-panel,
 .leaderboard {
   margin: 0 0 14px;
@@ -201,6 +251,47 @@ p {
 }
 
 .player-choice.active {
+  border-color: var(--accent);
+  background: rgba(124, 231, 255, 0.16);
+  color: #ffffff;
+}
+
+.ship-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ship-choice {
+  display: grid;
+  gap: 4px;
+  min-height: 76px;
+  min-width: 0;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 5px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ship-choice svg {
+  width: min(100%, 76px);
+  height: 38px;
+}
+
+.ship-choice span {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ship-choice.active {
   border-color: var(--accent);
   background: rgba(124, 231, 255, 0.16);
   color: #ffffff;
@@ -326,14 +417,75 @@ p {
 @media (max-width: 520px) {
   .hud {
     padding-top: 10px;
+    gap: 8px;
+  }
+
+  .controls {
+    position: fixed;
+    inset: auto auto 0 0;
+    width: 50vw;
+    height: 50vh;
+    min-width: 124px;
+    margin-left: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 12px 12px max(24px, env(safe-area-inset-bottom));
+    border: 1px solid rgba(124, 231, 255, 0.26);
+    border-left: 0;
+    border-radius: 0 8px 8px 0;
+    background: rgba(5, 9, 21, 0.22);
   }
 
   .stat {
     min-height: 38px;
+    padding-inline: 9px;
   }
 
   .stat strong {
     min-width: 48px;
     font-size: 17px;
+  }
+
+  .deploy-stat strong {
+    max-width: 88px;
+  }
+
+  .lives-stat {
+    grid-template-columns: auto minmax(58px, auto);
+  }
+
+  .lives {
+    min-width: 58px;
+    gap: 3px;
+  }
+
+  .life-icon {
+    width: 15px;
+    height: 12px;
+  }
+
+  .button {
+    width: min(112px, 100%);
+    min-height: clamp(68px, 12vh, 94px);
+    border-color: rgba(124, 231, 255, 0.28);
+    background: rgba(7, 12, 22, 0.72);
+  }
+
+  .button svg {
+    width: clamp(34px, 7vh, 44px);
+    height: clamp(34px, 7vh, 44px);
+  }
+
+  .ship-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 380px) {
+  .hud {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

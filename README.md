@@ -12,20 +12,33 @@ python3 -m http.server 8000
 
 Then open `http://localhost:8000`.
 
+For local debugging with automatic browser reload when `index.html`, `styles.css`, or `app.js` changes:
+
+```bash
+./scripts/debug_server.py
+```
+
+Then open `http://localhost:8000`. The script also prints a network URL you can open from a phone on the same Wi-Fi.
+
 ## How To Start
 
 1. Add a player name or select an existing player.
 2. Press **Start** to launch a run.
 3. Your score increases as you fly and jumps when you destroy enemies.
+4. Each run starts with **3 lives**.
+5. Choose a ship icon from the start menu before launching.
 
 ## Controls
 
 ### Touch Or Mouse
 
-- Drag anywhere on the screen to steer the ship up or down.
-- Use the on-screen laser button to fire at aliens.
+- On mobile, steer from the right side of the screen.
+- On larger screens, drag anywhere on the screen to steer the ship up or down.
+- On mobile, use the larger left-side laser and bomb buttons while steering with your other hand.
+- On larger screens, use the on-screen laser button to fire at aliens.
 - Use the on-screen bomb button to drop bombs on base stations.
 - Use the pause button to pause or resume the run.
+- The run pauses automatically if the browser is hidden, backgrounded, or the phone is locked.
 
 ### Default Keyboard Controls
 
@@ -54,11 +67,13 @@ Use **Reset defaults** to restore the standard controls.
 - Flying farther continuously adds points.
 - Destroying an alien with a laser awards **100 points**.
 - Destroying a base station with a bomb awards **150 points**.
+- Every **1000 points** awards an extra life.
 - Bonus point text appears beside each explosion briefly, then fades away.
 
 ## Survival Tips
 
 - Keep the ship in the open tunnel between the ceiling and floor terrain.
+- Crashing costs one life; if lives remain, you respawn and keep your score.
 - Aliens collide with you if they get too close, so fire early.
 - Base stations shoot upward from the ground; drop bombs before they line up a shot.
 - Use speed controls carefully: speeding up increases danger, while slowing down can help you recover.
@@ -82,7 +97,7 @@ Deploy:
 S3_BUCKET=game.cathalanddad.com CLOUDFRONT_DISTRIBUTION_ID=ABC123 ./scripts/deploy.sh
 ```
 
-The script uploads `index.html`, `styles.css`, and `app.js`, then invalidates the CloudFront cache.
+The script picks a random name from `deploy-names.txt`, writes it to `deploy.json`, uploads `index.html`, `styles.css`, `app.js`, and `deploy.json`, then invalidates the CloudFront cache. The deployed game shows that name in the top HUD beside the score and lives.
 
 Optional overrides:
 

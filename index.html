@@ -14,6 +14,14 @@
         <span>Score</span>
         <strong id="score">0</strong>
       </div>
+      <div class="stat lives-stat" aria-live="polite">
+        <span>Lives</span>
+        <div class="lives" id="lives" aria-label="3 lives"></div>
+      </div>
+      <div class="stat deploy-stat" id="deploy-stat" hidden>
+        <span>Deploy</span>
+        <strong id="deploy-name"></strong>
+      </div>
       <div class="controls">
         <button class="button" id="bomb" type="button" aria-label="Drop bomb">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true">
@@ -51,6 +59,13 @@
             <input id="player-name" name="player-name" type="text" maxlength="18" placeholder="New player name" />
             <button type="submit">Add</button>
           </form>
+        </section>
+        <section class="ship-panel" aria-label="Spaceship selection">
+          <div class="panel-heading">
+            <span>Ship</span>
+            <strong>Choose your icon</strong>
+          </div>
+          <div class="ship-picker" id="ship-picker"></div>
         </section>
         <section class="controls-panel" aria-label="Keyboard controls">
           <div class="panel-heading">
